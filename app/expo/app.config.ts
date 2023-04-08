@@ -27,9 +27,15 @@ const config: ExpoConfig = {
     favicon: "./assets/favicon.png",
   },
   android: {
+    package: "com.arena.rn",
     adaptiveIcon: {
       foregroundImage: "./assets/adaptive-icon.png",
       backgroundColor: "#FFFFFF",
+    },
+  },
+  extra: {
+    eas: {
+      projectId: "2846decb-95f0-4f7e-b9e3-a7ef6a6d7801",
     },
   },
 };
