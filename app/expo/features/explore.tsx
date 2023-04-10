@@ -1,6 +1,6 @@
 import { FlashList } from "@shopify/flash-list";
 import { styled } from "nativewind";
-import { FC, useEffect, useRef } from "react";
+import { FC, useRef } from "react";
 import { Image, Pressable, Text, View } from "react-native";
 
 export const Div = styled(View);
@@ -116,19 +116,6 @@ export const Explore: FC<NativeStackScreenProps<Routes, "Explore">> = ({
   const img = data?.pages?.flatMap((page) => {
     return page.data;
   });
-
-  useEffect(() => {
-    const alreadyExistMap = new Map<string, boolean>();
-
-    img &&
-      img.forEach((item) => {
-        if (alreadyExistMap.has(item.id)) {
-          console.log("already exist", item.id);
-        } else {
-          alreadyExistMap.set(item.id, true);
-        }
-      });
-  }, [img]);
 
   const loadMore = hasNextPage ? fetchNextPage : undefined;
 
