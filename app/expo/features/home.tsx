@@ -1,7 +1,7 @@
 import BottomSheet from "@gorhom/bottom-sheet";
 import { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { FC, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Image, Pressable } from "react-native";
+import { Pressable } from "react-native";
 import {
   Directions,
   Gesture,
@@ -24,7 +24,7 @@ import Animated, {
 import { Matrix3, clamp, identity3, multiply3 } from "react-native-redash";
 import { useQuery } from "react-query";
 import { Routes } from "../App";
-import { Div, T } from "./explore";
+import { AnimatedDiv, Div, Img, T } from "./shared";
 
 export interface Block {
   __typename: string;
@@ -114,8 +114,6 @@ function scaleMatrix(matrox: Matrix3, value: number) {
   return multiply3(matrox, [value, 0, 0, 0, value, 0, 0, 0, 1]);
 }
 
-const AnimatedDiv = Animated.createAnimatedComponent(Div);
-
 export const Home: FC<NativeStackScreenProps<Routes, "Home">> = ({
   navigation,
   route,
@@ -124,20 +122,10 @@ export const Home: FC<NativeStackScreenProps<Routes, "Home">> = ({
 
   const { data: block, isLoading } = useBlock(blockId);
 
-  const [imageReady, setImageReady] = useState(false);
   const sheetAnimatedIndex = useSharedValue(0);
   const sheetAnimatedPosition = useSharedValue(0);
 
   const initialSnapPoints = useMemo(() => ["25%", "50%"], []);
-
-  useEffect(() => {
-    const f = async () => {
-      if (block?.image_url && !imageReady) {
-        setImageReady(await Image.prefetch(block.image_url));
-      }
-    };
-    f();
-  }, [block]);
 
   const backgroundOpacity = useSharedValue(0);
 
@@ -473,15 +461,21 @@ export const Home: FC<NativeStackScreenProps<Routes, "Home">> = ({
               filngStyle,
             ]}
           >
-            <Animated.Image
+            <Img
+              placeholderContentFit="contain"
               style={{ flex: 1, marginHorizontal: 6, zIndex: 77 }}
-              resizeMode={"contain"}
-              source={{
+              contentFit={"contain"}
+              placeholder={{
                 uri: initialImageUrl,
+              }}
+              source={{
+                // uri: block ? block.image_url : initialImageUrl,
+                uri: block?.image_url,
+                // uri: initialImageUrl,
                 // uri: "https://d2w9rnfcy7mm78.cloudfront.net/6651769/original_049ed5752c0df4cfc123a37120132c37.jpg?1585600664?bc=0 ",
                 // uri: "https://t2.genius.com/unsafe/1000x1000/https%3A%2F%2Fimages.genius.com%2F7cf1f8cf1fc63990f3bcd02fe5d52be7.1000x1000x1.png",
               }}
-            ></Animated.Image>
+            ></Img>
           </Animated.View>
         </GestureDetector>
 

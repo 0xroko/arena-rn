@@ -1,33 +1,10 @@
+import { Image as ExpoImage } from "expo-image";
+
 import { FlashList } from "@shopify/flash-list";
-import { styled } from "nativewind";
+import { Buffer } from "buffer";
 import { FC, useRef } from "react";
-import { Image, Pressable, Text, View } from "react-native";
-
-export const Div = styled(View);
-export const T = styled(Text);
-export const Img = styled(Image);
-
+import { Pressable } from "react-native";
 import { useInfiniteQuery } from "react-query";
-
-const delayConfig = {
-  duration: 2000,
-  easing: Easing.ease,
-} as WithTimingConfig;
-
-const originTimingConfig = {
-  duration: 2000,
-  easing: Easing.ease,
-} as WithTimingConfig;
-
-export const transition = SharedTransition.custom((values) => {
-  "worklet";
-  return {
-    originX: withTiming(values.targetOriginX, originTimingConfig),
-    originY: withTiming(values.targetOriginY, originTimingConfig),
-    height: withTiming(values.targetHeight, delayConfig),
-    width: withTiming(values.targetWidth, delayConfig),
-  };
-});
 
 const fetcher = async (pageNumber: number = 0) => {
   console.log("fetching page", pageNumber);
@@ -72,7 +49,8 @@ export function useImages() {
     error,
     isFetching,
     hasNextPage,
-
+    isFetchingNextPage,
+    isRefetching,
     fetchNextPage,
   } = useInfiniteQuery(
     ["dogs"],
@@ -90,7 +68,9 @@ export function useImages() {
     data,
     isError,
     isLoading,
+    isRefetching,
     error,
+    isFetchingNextPage,
     isFetching,
     hasNextPage,
     fetchNextPage,
@@ -98,36 +78,90 @@ export function useImages() {
 }
 
 import { NativeStackScreenProps } from "@react-navigation/native-stack";
-import {
-  Easing,
-  SharedTransition,
-  WithTimingConfig,
-  withTiming,
-} from "react-native-reanimated";
 import { Routes } from "../App";
+import { Div, T } from "./shared";
 
 export const Explore: FC<NativeStackScreenProps<Routes, "Explore">> = ({
   navigation,
   route,
 }) => {
-  const { isError, data, error, fetchNextPage, hasNextPage, isFetching } =
-    useImages();
+  const {
+    isError,
+    data,
+    error,
+    fetchNextPage,
+    hasNextPage,
+    isFetching,
+    isRefetching,
+  } = useImages();
 
-  const img = data?.pages?.flatMap((page) => {
-    return page.data;
+  const img = data?.pages?.flatMap((page, i) => {
+    return page.data.filter((im) => {
+      const url = im.src;
+
+      const urlParts = url.split("/");
+      const protocolAndDomain = urlParts.slice(0, 3).join("/");
+      const pathname = url
+        .replace(protocolAndDomain, "")
+        .split("?")[0]
+        .split("/")[1];
+
+      let drop = true;
+
+      try {
+        const st = Buffer.from(pathname, "base64").toString();
+        if (st.includes("png") || st.includes("jpg")) drop = false;
+      } catch (error) {
+        drop = true;
+      }
+      return !drop;
+    });
   });
 
   const loadMore = hasNextPage ? fetchNextPage : undefined;
-
   const flashListRef = useRef<FlashList<any>>(null);
+
+  // const scrollY = useSharedValue(0);
+  // const velNeeded = 0.3;
+
+  // const isDown = useSharedValue(false);
+
+  // useDerivedValue(() => {
+  //   if (scrollY.value < -velNeeded) {
+  //     isDown.value = false;
+  //   } else if (scrollY.value > velNeeded) {
+  //     isDown.value = true;
+  //   }
+  // });
+
+  // const addButtonStyle = useAnimatedStyle(() => {
+  //   return {
+  //     translateY: withTiming(isDown.value ? 100 : 0, {
+  //       duration: 100,
+  //       easing: Easing.inOut(Easing.ease),
+  //     }),
+  //     opacity: 0.9,
+  //   };
+  // });
 
   return (
     <Div className="" style={{ flex: 1, backgroundColor: "black" }}>
+      {/* <AnimatedDiv
+        style={addButtonStyle}
+        className={`absolute bg-black flex flex-row justify-center items-center px-6 py-3 border border-white z-20 bottom-5 right-5`}
+      >
+        <Plus style={{ height: 24, width: 24 }} stroke={"#fff"} />
+        <T className={`text-white ml-2`}>Add to Are.na</T>
+      </AnimatedDiv> */}
       <FlashList
         data={img}
         contentContainerStyle={{ paddingTop: 30 }}
         ref={flashListRef}
+        // onScroll={(e) => {
+        //   scrollY.value = e.nativeEvent.velocity.y;
+        // }}
         numColumns={2}
+        // keyExtractor={(item) => item.id.toString()}
         renderItem={({ item, index, target }) => (
           <Pressable
             style={{ aspectRatio: 1, flex: 1 }}
@@ -139,9 +173,13 @@ export const Explore: FC<NativeStackScreenProps<Routes, "Explore">> = ({
               // Linking.openURL(`https://are.na${item.href}`);
             }}
           >
-            <Image
-              resizeMode={"contain"}
+            <ExpoImage
+              contentFit="contain"
+              // resizeMode="contain"
+
+              // cachePolicy="none"
               style={{ aspectRatio: 1, flex: 1, margin: 10 }}
+              recyclingKey={item.id.toString()}
               source={{
                 uri: item.src_3x,
               }}

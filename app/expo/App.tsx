@@ -17,10 +17,9 @@ const defaultScreenOptions = {
 
 import { StatusBar } from "expo-status-bar";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
-import { QueryClient, QueryClientProvider } from "react-query";
+import { QueryClientProvider } from "react-query";
 import { Home } from "./features/home";
-
-const queryClient = new QueryClient();
+import { queryClient } from "./features/shared";
 
 const Stack = createNativeStackNavigator<Routes>();
 

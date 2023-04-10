@@ -22,6 +22,7 @@ const config: ExpoConfig = {
   assetBundlePatterns: ["**/*"],
   ios: {
     supportsTablet: true,
+    bundleIdentifier: "com.arena.rn",
   },
   web: {
     favicon: "./assets/favicon.png",
