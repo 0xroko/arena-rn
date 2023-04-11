@@ -1,15 +1,21 @@
 import BottomSheet from "@gorhom/bottom-sheet";
+import { useNavigation } from "@react-navigation/native";
 import { NativeStackScreenProps } from "@react-navigation/native-stack";
-import { FC, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Pressable } from "react-native";
 import {
-  Directions,
-  Gesture,
-  GestureDetector,
-} from "react-native-gesture-handler";
+  FC,
+  forwardRef,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
+import { Dimensions, Pressable } from "react-native";
+import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import Animated, {
   Easing,
   Extrapolate,
+  SharedValue,
   WithTimingConfig,
   interpolate,
   measure,
@@ -18,90 +24,23 @@ import Animated, {
   useAnimatedStyle,
   useDerivedValue,
   useSharedValue,
-  withSequence,
   withTiming,
 } from "react-native-reanimated";
 import { Matrix3, clamp, identity3, multiply3 } from "react-native-redash";
 import { useQuery } from "react-query";
 import { Routes } from "../App";
-import { AnimatedDiv, Div, Img, T } from "./shared";
-
-export interface Block {
-  __typename: string;
-  id: number;
-  title: string;
-  href: string;
-  source_url: string;
-  image_url: string;
-  image_updated_at: string;
-  image_updated_at_unix_time: string;
-  content: any;
-  source: Source;
-  created_at_unix_time: string;
-  created_at_timestamp: string;
-  created_at: string;
-  updated_at: string;
-  updated_at_timestamp: string;
-  description: string;
-  user: User;
-  can: Can;
-  shareable_href: string;
-  shareable_title: string;
-  editable_title: string;
-  editable_description: string;
-}
-
-export interface Source {
-  title: string;
-  url: string;
-  provider_name: string;
-  provider_url: string;
-  __typename: string;
-}
-
-export interface User {
-  __typename: string;
-  id: number;
-  name: string;
-  href: string;
-}
-
-export interface Can {
-  manage: boolean;
-  comment: boolean;
-  __typename: string;
-  mute: boolean;
-  potentially_edit_thumbnail: boolean;
-  edit_thumbnail: boolean;
-}
+import {
+  AnimatedImage,
+  Block,
+  Div,
+  T,
+  blockFetcher,
+  useBlockStore,
+  useExploreState,
+} from "./shared";
 
 const useBlock = (blockId: string) => {
-  return useQuery(["block", blockId], async () => {
-    const response = await fetch("https://api.are.na/graphql", {
-      headers: {
-        accept: "*/*",
-        "accept-language": "en-US,en;q=0.9,hr-HR;q=0.8,hr;q=0.7,bs;q=0.6",
-        "content-type": "application/json",
-        "sec-ch-ua":
-          '"Chromium";v="112", "Google Chrome";v="112", "Not:A-Brand";v="99"',
-        "sec-ch-ua-mobile": "?0",
-        "sec-ch-ua-platform": '"Windows"',
-        "sec-fetch-dest": "empty",
-        "sec-fetch-mode": "cors",
-        "sec-fetch-site": "same-site",
-        "x-app-token": "pL4YhrdwXq7Bm7t8s6Yt",
-        "x-auth-token": "PcZGfG8s-yggoJVSEpa4NBGCvFwMLxmo-5je-Y93",
-      },
-      referrer: "https://www.are.na/",
-      referrerPolicy: "strict-origin-when-cross-origin",
-      body: `{\"operationName\":\"ModalFullBlock\",\"variables\":{\"id\":\"${blockId}\"},\"query\":\"query ModalFullBlock($id: ID!) {\\n  block: blokk(id: $id) {\\n    __typename\\n    ... on Model {\\n      id\\n      __typename\\n    }\\n    ...FullBlock\\n  }\\n}\\n\\nfragment FullBlock on Konnectable {\\n  __typename\\n  ... on Model {\\n    id\\n    __typename\\n  }\\n  ... on ConnectableInterface {\\n    title\\n    href\\n    __typename\\n  }\\n  ...FullBlockContentPane\\n  ...FullBlockMetadataPane\\n}\\n\\nfragment FullBlockContentPane on Konnectable {\\n  ...FullBlockImage\\n  ...FullBlockText\\n  ...FullBlockLink\\n  ...FullBlockAttachment\\n  ...FullBlockEmbed\\n  __typename\\n}\\n\\nfragment FullBlockImage on Konnectable {\\n  ... on Image {\\n    id\\n    title\\n    thumb_url: image_url(size: THUMB)\\n    image_url(size: LARGE)\\n    original_image_url: image_url(size: ORIGINAL)\\n    alt_text\\n    __typename\\n  }\\n  __typename\\n}\\n\\nfragment FullBlockText on Text {\\n  __typename\\n  id\\n  content(format: HTML)\\n  raw: content(format: MARKDOWN)\\n  can {\\n    manage\\n    __typename\\n  }\\n}\\n\\nfragment FullBlockLink on Konnectable {\\n  __typename\\n  ... on Link {\\n    id\\n    title\\n    source_url\\n    image_url(size: ORIGINAL)\\n    image_updated_at(format: \\\"%m/%d/%y\\\")\\n    image_updated_at_unix_time: image_updated_at(format: \\\"%s\\\")\\n    content(format: HTML)\\n    source {\\n      title\\n      url\\n      provider_name\\n      provider_url\\n      __typename\\n    }\\n    __typename\\n  }\\n}\\n\\nfragment FullBlockAttachment on Konnectable {\\n  __typename\\n  ... on Attachment {\\n    id\\n    title\\n    file_extension\\n    file_url\\n    file_size\\n    file_content_type\\n    image_url(size: DISPLAY)\\n    image_updated_at(format: \\\"%m/%d/%y\\\")\\n    image_updated_at_unix_time: image_updated_at(format: \\\"%s\\\")\\n    __typename\\n  }\\n}\\n\\nfragment FullBlockEmbed on Konnectable {\\n  ... on Embed {\\n    id\\n    title\\n    embed_html\\n    embed_width\\n    embed_height\\n    __typename\\n  }\\n  __typename\\n}\\n\\nfragment FullBlockMetadataPane on Konnectable {\\n  ... on Model {\\n    created_at_unix_time: created_at(format: \\\"%s\\\")\\n    created_at_timestamp: created_at\\n    created_at(relative: true)\\n    updated_at(relative: true)\\n    updated_at_timestamp: updated_at\\n    __typename\\n  }\\n  ... on ConnectableInterface {\\n    title\\n    description(format: HTML)\\n    user {\\n      __typename\\n      id\\n      name\\n      href\\n    }\\n    __typename\\n  }\\n  ... on Block {\\n    can {\\n      manage\\n      comment\\n      __typename\\n    }\\n    __typename\\n  }\\n  ...FullBlockActions\\n  ...ManageBlock\\n  __typename\\n}\\n\\nfragment FullBlockActions on Konnectable {\\n  __typename\\n  ... on Image {\\n    find_original_url\\n    downloadable_image: resized_image_url(downloadable: true)\\n    __typename\\n  }\\n  ... on Text {\\n    find_original_url\\n    __typename\\n  }\\n  ... on ConnectableInterface {\\n    source {\\n      title\\n      url\\n      __typename\\n    }\\n    __typename\\n  }\\n  ... on Block {\\n    can {\\n      mute\\n      potentially_edit_thumbnail\\n      edit_thumbnail\\n      __typename\\n    }\\n    __typename\\n  }\\n  ...FullBlockShare\\n}\\n\\nfragment FullBlockShare on Konnectable {\\n  ... on ConnectableInterface {\\n    shareable_href: href\\n    shareable_title: title(truncate: 40)\\n    __typename\\n  }\\n  __typename\\n}\\n\\nfragment ManageBlock on Konnectable {\\n  __typename\\n  ... on Model {\\n    id\\n    __typename\\n  }\\n  ... on ConnectableInterface {\\n    editable_title: title\\n    editable_description: description(format: MARKDOWN)\\n    __typename\\n  }\\n  ... on Text {\\n    editable_content: content(format: MARKDOWN)\\n    __typename\\n  }\\n  ... on Image {\\n    editable_alt_text: alt_text\\n    __typename\\n  }\\n}\\n\"}`,
-      method: "POST",
-      mode: "cors",
-      credentials: "omit",
-    });
-    const data = await response.json();
-    return data.data.block as Block;
-  });
+  return useQuery(["block", blockId], () => blockFetcher(blockId));
 };
 
 function translateMatrix(matrix: Matrix3, x: number, y: number) {
@@ -114,20 +53,632 @@ function scaleMatrix(matrox: Matrix3, value: number) {
   return multiply3(matrox, [value, 0, 0, 0, value, 0, 0, 0, 1]);
 }
 
+interface ImageViewerProps {
+  children?: React.ReactNode | React.ReactNode[];
+  initialImage: string;
+  image?: string;
+  onNext?: () => void;
+  onPrevious?: () => void;
+  onDismiss?: () => void;
+  externalScale?: SharedValue<number>;
+  nextImage?: string;
+  previousImage?: string;
+  initialNextImage?: string;
+  initialPreviousImage?: string;
+  animateOnMount?: boolean;
+}
+
+export const ImageViewer = ({
+  children,
+  initialImage,
+  image,
+  onDismiss,
+  onNext,
+  animateOnMount,
+  onPrevious,
+  nextImage,
+  initialNextImage,
+  initialPreviousImage,
+  previousImage,
+}: ImageViewerProps) => {
+  const activeB = 20;
+  const toActive = [-activeB, activeB];
+  const minDist = 20;
+  const width = Dimensions.get("window").width;
+
+  const isPinching = useSharedValue(false);
+  const isPanning = useSharedValue(false);
+  const pinchOrigin = useSharedValue({ x: 0, y: 0 });
+  const pinchScale = useSharedValue(1);
+  const pinchTranslation = useSharedValue({
+    x: 0,
+    y: 0,
+  });
+  const nextImageTranslationX = useSharedValue(0);
+  const nextImageTranslationY = useSharedValue(0);
+  const prevImageTranslationX = useSharedValue(0);
+  const panTranslationX = useSharedValue(0);
+  const panTranslationY = useSharedValue(0);
+  const ref = useAnimatedRef();
+
+  const imageOpacity = useSharedValue(animateOnMount ? 0 : 1);
+
+  useEffect(() => {
+    imageOpacity.value = withTiming(1, { duration: 100 });
+  }, []);
+
+  const timeout = (fn: () => void | undefined, ms: number) => {
+    return () => {
+      setTimeout(() => {
+        fn();
+      }, ms);
+    };
+  };
+
+  const onNextTimeout = timeout(onNext, 120);
+
+  const onPreviousTimeout = timeout(onPrevious, 120);
+
+  const dismissTimeout = timeout(onDismiss, 120);
+
+  const PAN_DISSMISS_TRASHOLD = width * 0.3;
+
+  const flingGestureDown = Gesture.Pan()
+    .minDistance(minDist)
+    .maxPointers(1)
+    .minPointers(1)
+    .failOffsetX(toActive)
+    .onStart((e) => {
+      panTranslationY.value = 0;
+      isPanning.value = true;
+    })
+    .onUpdate((e) => {
+      panTranslationY.value = e.translationY;
+      pinchScale.value = 1 - e.translationY / 30;
+    })
+    .onEnd((e) => {
+      if (e.translationY > PAN_DISSMISS_TRASHOLD) {
+        // backgroundOpacity.value = withTiming(0, { duration: 100 });
+        pinchScale.value = withTiming(0.3, { duration: 100 });
+        panTranslationY.value = withTiming(e.y + 400, { duration: 100 });
+        // runOnJS(forceCloseSheet)({ duration: 100 });
+        runOnJS(dismissTimeout)();
+      } else {
+        isPanning.value = false;
+        panTranslationY.value = withTiming(0, { duration: 100 });
+        pinchScale.value = 1;
+      }
+    });
+
+  const TRANSLATION_TRASHOLD = width * 0.5;
+  const VELOCITY_TRASHOLD = 1500;
+
+  const flingGestureNext = Gesture.Pan()
+    .minDistance(minDist)
+    .maxPointers(1)
+    .minPointers(1)
+    .failOffsetY(toActive)
+    .onStart((e) => {
+      panTranslationX.value = 0;
+      nextImageTranslationX.value = 0;
+      prevImageTranslationX.value = 0;
+      isPanning.value = true;
+    })
+    .onUpdate((e) => {
+      panTranslationX.value = e.translationX;
+      nextImageTranslationX.value = e.translationX;
+      prevImageTranslationX.value = e.translationX;
+
+      // scale.value = 1 - e.translationY / 300;
+    })
+    .onEnd((e) => {
+      if (
+        -e.translationX > TRANSLATION_TRASHOLD ||
+        e.velocityX < -VELOCITY_TRASHOLD
+      ) {
+        const measured = measure(ref);
+        panTranslationX.value = withTiming(-measured.width, { duration: 100 });
+        nextImageTranslationX.value = withTiming(-measured.width, {
+          duration: 100,
+        });
+        runOnJS(onNextTimeout)();
+      } else if (
+        e.translationX > TRANSLATION_TRASHOLD ||
+        e.velocityX > VELOCITY_TRASHOLD
+      ) {
+        const measured = measure(ref);
+        panTranslationX.value = withTiming(measured.width, { duration: 100 });
+        prevImageTranslationX.value = withTiming(measured.width, {
+          duration: 100,
+        });
+
+        runOnJS(onPreviousTimeout)();
+      } else {
+        nextImageTranslationX.value = withTiming(0, { duration: 100 });
+        prevImageTranslationX.value = withTiming(0, { duration: 100 });
+        panTranslationX.value = withTiming(0, { duration: 100 });
+      }
+    });
+
+  const pinch = Gesture.Pinch()
+    .onStart((event) => {
+      const measured = measure(ref);
+      isPinching.value = true;
+
+      pinchOrigin.value = {
+        x: event.focalX - measured.width / 2,
+        y: event.focalY - measured.height / 2,
+      };
+    })
+    .onBegin((event) => {})
+    .onChange((event) => {
+      pinchScale.value = event.scale;
+    })
+    .onEnd(() => {
+      pinchScale.value = 1;
+      isPinching.value = false;
+    });
+
+  const pan = Gesture.Pan()
+    .averageTouches(true)
+    .maxPointers(2)
+    .minPointers(2)
+    .onStart((event) => {})
+    .onChange((event) => {
+      if (!isPinching.value) return;
+      pinchTranslation.value = {
+        x: event.translationX,
+        y: event.translationY,
+      };
+    })
+    .onEnd(() => {
+      pinchTranslation.value = { x: 0, y: 0 };
+      pinchOrigin.value = { x: 0, y: 0 };
+    });
+
+  const pinchStyle = useAnimatedStyle(() => {
+    let matrix = identity3;
+    if (pinchTranslation.value.x !== 0 || pinchTranslation.value.y !== 0) {
+      matrix = translateMatrix(
+        matrix,
+        pinchTranslation.value.x,
+        pinchTranslation.value.y
+      );
+    }
+
+    if (pinchScale.value !== 1) {
+      matrix = translateMatrix(
+        matrix,
+        pinchOrigin.value.x,
+        pinchOrigin.value.y
+      );
+      matrix = scaleMatrix(matrix, pinchScale.value);
+      matrix = translateMatrix(
+        matrix,
+        -pinchOrigin.value.x,
+        -pinchOrigin.value.y
+      );
+    }
+
+    let timingConfig = {
+      duration: isPinching.value || isPanning.value ? 0 : 100,
+      easing: Easing.ease,
+    } as WithTimingConfig;
+
+    let scaleFactor = 1;
+    // let scaleFactor = interpolate(sheetAnimatedIndex.value, [0, 1], [1, 0.9], {
+    //   extrapolateLeft: Extrapolate.CLAMP,
+    //   extrapolateRight: Extrapolate.CLAMP,
+    // });
+
+    if (isPinching.value) scaleFactor = 1;
+
+    if (scaleFactor < 1) {
+      timingConfig.duration = 0;
+    }
+
+    return {
+      opacity: imageOpacity.value,
+      transform: [
+        { translateX: withTiming(matrix[2], timingConfig) },
+        { translateY: withTiming(matrix[5], timingConfig) },
+        {
+          scaleX: withTiming(
+            clamp(matrix[0] * scaleFactor, 0.5, 10),
+            timingConfig
+          ),
+        },
+        {
+          scaleY: withTiming(
+            clamp(matrix[4] * scaleFactor, 0.5, 10),
+            timingConfig
+          ),
+        },
+      ],
+    };
+  });
+
+  const panStyle = useAnimatedStyle(() => {
+    return {
+      transform: [
+        { translateX: panTranslationX.value },
+        { translateY: panTranslationY.value },
+      ],
+    };
+  });
+
+  const nextImageStyle = useAnimatedStyle(() => {
+    return {
+      transform: [
+        { translateX: nextImageTranslationX.value },
+        { translateY: nextImageTranslationY.value },
+      ],
+    };
+  });
+
+  const prevImageStyle = useAnimatedStyle(() => {
+    // const measured = measure(ref);
+    return {
+      transform: [{ translateX: -width + prevImageTranslationX.value }],
+    };
+  });
+
+  const gesturesCobined = Gesture.Exclusive(
+    // longPressGesture,
+    Gesture.Race(flingGestureNext, flingGestureDown),
+    Gesture.Simultaneous(pinch, pan)
+    // flingGesture
+  );
+
+  return (
+    <GestureDetector gesture={gesturesCobined}>
+      <Animated.View
+        collapsable={false}
+        style={[
+          {
+            height: "80%",
+            width: "200%",
+            flexDirection: "row",
+          },
+        ]}
+      >
+        <AnimatedImage
+          ref={ref as any}
+          placeholderContentFit="contain"
+          style={[
+            {
+              flex: 1,
+              zIndex: 77,
+              top: 0,
+              left: 0,
+              height: "100%",
+
+              position: "absolute",
+              width: "50%",
+            },
+            prevImageStyle,
+          ]}
+          contentFit={"contain"}
+          placeholder={{
+            uri: initialPreviousImage,
+          }}
+          source={{
+            // uri: block ? block.image_url : initialImageUrl,
+            // uri: block?.image_url,
+            uri: previousImage,
+            // uri: "https://d2w9rnfcy7mm78.cloudfront.net/6651769/original_049ed5752c0df4cfc123a37120132c37.jpg?1585600664?bc=0 ",
+            // uri: "https://t2.genius.com/unsafe/1000x1000/https%3A%2F%2Fimages.genius.com%2F7cf1f8cf1fc63990f3bcd02fe5d52be7.1000x1000x1.png",
+          }}
+        ></AnimatedImage>
+        <AnimatedImage
+          ref={ref as any}
+          placeholderContentFit="contain"
+          style={[
+            {
+              flex: 1,
+              zIndex: 77,
+            },
+            pinchStyle,
+            panStyle,
+          ]}
+          contentFit={"contain"}
+          placeholder={{
+            uri: initialImage,
+          }}
+          source={{
+            // uri: block ? block.image_url : initialImageUrl,
+            // uri: block?.image_url,
+            uri: image,
+            // uri: "https://d2w9rnfcy7mm78.cloudfront.net/6651769/original_049ed5752c0df4cfc123a37120132c37.jpg?1585600664?bc=0 ",
+            // uri: "https://t2.genius.com/unsafe/1000x1000/https%3A%2F%2Fimages.genius.com%2F7cf1f8cf1fc63990f3bcd02fe5d52be7.1000x1000x1.png",
+          }}
+        ></AnimatedImage>
+        <AnimatedImage
+          placeholderContentFit="contain"
+          style={[
+            {
+              flex: 1,
+              zIndex: 77,
+            },
+            nextImageStyle,
+            // pinchStyle,
+          ]}
+          contentFit={"contain"}
+          placeholder={{
+            uri: nextImage,
+          }}
+          source={{
+            // uri: block ? block.image_url : initialImageUrl,
+            // uri: route.params.other.next.initialImageUrl,
+            uri: nextImage,
+            // uri: "https://d2w9rnfcy7mm78.cloudfront.net/6651769/original_049ed5752c0df4cfc123a37120132c37.jpg?1585600664?bc=0 ",
+            // uri: "https://t2.genius.com/unsafe/1000x1000/https%3A%2F%2Fimages.genius.com%2F7cf1f8cf1fc63990f3bcd02fe5d52be7.1000x1000x1.png",
+          }}
+        ></AnimatedImage>
+      </Animated.View>
+    </GestureDetector>
+  );
+};
+
+interface ImageBackgroundProps {
+  children?: React.ReactNode | React.ReactNode[];
+  opacity?: SharedValue<number>;
+}
+
+export const ImageBackground = ({
+  children,
+  opacity,
+}: ImageBackgroundProps) => {
+  const style = useAnimatedStyle(() => {
+    return {
+      opacity: opacity.value,
+    };
+  });
+
+  return (
+    <Animated.View
+      style={[
+        {
+          backgroundColor: "black",
+          flex: 1,
+          position: "absolute",
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          zIndex: 0,
+        },
+        style,
+      ]}
+    ></Animated.View>
+  );
+};
+
+interface BlockInfoProps {
+  children?: React.ReactNode | React.ReactNode[];
+  block?: Block;
+  animateOnMount?: boolean;
+}
+
+export const BlockInfoSheet = forwardRef(
+  ({ children, block, animateOnMount }: BlockInfoProps, sheetRef: any) => {
+    const data = [
+      {
+        option: "share",
+        title: "Share",
+      },
+      {
+        option: "find-original",
+        title: "Find original",
+      },
+      {
+        option: "download",
+        title: "Download",
+      },
+      {
+        option: "mute",
+        title: "Mute",
+      },
+    ] as const;
+
+    // callbacks
+
+    const renderItem = useCallback(
+      (item: typeof data[0]) => (
+        <Div key={item.option} className={`px-0 my-1 mx-2`}>
+          <T className={`text-white font-bold`}>{item.title}</T>
+        </Div>
+      ),
+      []
+    );
+    const sheetAnimatedIndex = useSharedValue(0);
+    const sheetAnimatedPosition = useSharedValue(0);
+
+    const initialSnapPoints = useMemo(() => ["25%", "50%"], []);
+    return (
+      <BottomSheet
+        backgroundStyle={{ backgroundColor: "black" }}
+        backdropComponent={({ animatedIndex, animatedPosition }) => {
+          const containerAnimatedStyle = useAnimatedStyle(() => ({
+            opacity: interpolate(
+              animatedIndex.value,
+              [0, 1],
+              [0, 0.4],
+              Extrapolate.CLAMP
+            ),
+          }));
+          return (
+            <Pressable
+              style={{
+                position: "absolute",
+                top: 0,
+                bottom: 0,
+                left: 0,
+                right: 0,
+              }}
+              onPress={() => {
+                sheetRef.current?.snapToIndex(0);
+              }}
+            >
+              <Animated.View
+                style={[
+                  {
+                    backgroundColor: "black",
+                    flex: 1,
+                  },
+                  containerAnimatedStyle,
+                ]}
+              />
+            </Pressable>
+          );
+        }}
+        handleIndicatorStyle={{
+          backgroundColor: "white",
+        }}
+        handleStyle={{
+          // backgroundColor: "red",
+          paddingTop: 12,
+          paddingBottom: 28,
+        }}
+        animatedIndex={sheetAnimatedIndex}
+        animatedPosition={sheetAnimatedPosition}
+        index={0}
+        animateOnMount={animateOnMount}
+        ref={sheetRef}
+        snapPoints={initialSnapPoints}
+      >
+        <Div className={`px-5 pb-5`}>
+          <Div className={`text-ellipsis`}>
+            <T className={`text-white text-lg font-bold `}>{block?.title}</T>
+            <T className={`text-[#6e6e6e] text-sm mt-3`}>
+              Added {block?.created_at} by{" "}
+              <T className={`font-bold`}>{block?.user?.name}</T>
+            </T>
+            <T className={`text-[#6e6e6e] text-sm`}>
+              Last updated {block?.updated_at}
+            </T>
+            <T className={`text-[#6e6e6e] text-sm`}>
+              {block?.source?.title ? "Source: " : "Source"}
+              {block?.source?.title}
+            </T>
+          </Div>
+          <Div
+            className={`border-[#6e6e6e] flex-row justify-between my-2 border-b-2`}
+          >
+            <T className={`text-[#6e6e6e] m-2`}>Actions</T>
+            <T className={`text-[#6e6e6e] m-2 font-bold`}>Flag</T>
+          </Div>
+          {data.map(renderItem)}
+        </Div>
+      </BottomSheet>
+    );
+  }
+);
+
+interface ImageBlockViewerProps {
+  children?: React.ReactNode | React.ReactNode[];
+  blockId: number;
+  initialImageUrl: string;
+}
+
+export const ImageBlockViewer = ({
+  children,
+  blockId,
+  initialImageUrl,
+}: ImageBlockViewerProps) => {
+  const blockStore = useBlockStore();
+
+  //const {block, next(), previous()} = useCollectionState(id: string, inititalBlock: BasicImageBlock)
+  const { next, previous, current, prefetchBlock } = useExploreState(
+    blockStore.currentBlock.toString()
+  );
+
+  console.log("next", blockStore.currentBlock.toString());
+  const backgroundOpacity = useSharedValue(0);
+
+  const { data: block, isLoading } = useBlock(
+    blockStore.currentBlock.toString()
+  );
+
+  useEffect(() => {
+    backgroundOpacity.value = withTiming(0.8, { duration: 100 });
+    blockStore.setMounted(true);
+  }, []);
+
+  useEffect(() => {
+    const p = async () => {
+      await Promise.all([prefetchBlock(next?.id), prefetchBlock(previous?.id)]);
+    };
+    p();
+  }, [blockStore.currentBlock]);
+
+  const sheetAnimatedIndex = useSharedValue(0);
+  const sheetRef = useRef<BottomSheet>(null);
+  const route = useNavigation();
+
+  return (
+    <Div className={`flex-1`}>
+      <ImageBackground opacity={backgroundOpacity} />
+
+      <ImageViewer
+        initialImage={current?.src_3x}
+        previousImage={previous?.src}
+        nextImage={next?.src}
+        animateOnMount={!blockStore.mounted}
+        initialPreviousImage={previous?.src_3x}
+        initialNextImage={next?.src_3x}
+        key={current?.id}
+        onDismiss={() => {
+          route.goBack();
+          blockStore.setMounted(false);
+        }}
+        onNext={() => {
+          console.log("onNext");
+          blockStore.setCurrentBlock(next?.id);
+        }}
+        onPrevious={() => {
+          blockStore.setCurrentBlock(previous?.id);
+        }}
+        image={block?.image_url}
+      />
+      <BlockInfoSheet
+        ref={sheetRef}
+        block={block}
+        animateOnMount={!blockStore.mounted}
+      />
+    </Div>
+  );
+};
+
 export const Home: FC<NativeStackScreenProps<Routes, "Home">> = ({
+  navigation,
+  route,
+}) => {
+  return (
+    <ImageBlockViewer
+      blockId={route.params.blockId}
+      initialImageUrl={route.params.initialImageUrl}
+    />
+  );
+};
+
+export const Home2: FC<NativeStackScreenProps<Routes, "Home">> = ({
   navigation,
   route,
 }) => {
   const { blockId, initialImageUrl } = route.params;
 
-  const { data: block, isLoading } = useBlock(blockId);
+  const from = route.params.from;
+  console.log("FROM", from);
+
+  const { data: block, isLoading } = useBlock(blockId as any);
 
   const sheetAnimatedIndex = useSharedValue(0);
   const sheetAnimatedPosition = useSharedValue(0);
 
   const initialSnapPoints = useMemo(() => ["25%", "50%"], []);
 
-  const backgroundOpacity = useSharedValue(0);
+  const backgroundOpacity = useSharedValue(from === "Explore" ? 0 : 1);
 
   const ref = useAnimatedRef();
 
@@ -141,15 +692,17 @@ export const Home: FC<NativeStackScreenProps<Routes, "Home">> = ({
 
   const isPinching = useSharedValue(false);
   // const transform = useSharedValue(identity3);
-  const opacity = useSharedValue(0);
+  const opacity = useSharedValue(from === "Explore" ? 0 : 1);
   const sheetRef = useRef<BottomSheet>(null);
 
   useEffect(() => {
-    opacity.value = withTiming(1, { duration: 200 });
-    backgroundOpacity.value = withTiming(1, { duration: 200 });
+    if (from === "Explore") {
+      opacity.value = withTiming(1, { duration: 200 });
+      backgroundOpacity.value = withTiming(1, { duration: 200 });
+    }
   }, []);
 
-  const isLongPressing = useSharedValue(false);
+  const isPanning = useSharedValue(false);
 
   const forceCloseSheet = sheetRef?.current?.forceClose;
 
@@ -157,38 +710,130 @@ export const Home: FC<NativeStackScreenProps<Routes, "Home">> = ({
 
   const [higlighted, setHighlighted] = useState(-1);
   const position = useSharedValue(0);
+  const positionNext = useSharedValue(0);
+
+  const popTimouted = () => {
+    setTimeout(() => {
+      navigation.pop();
+    }, 100);
+  };
 
   const timingDuration = useSharedValue(0);
 
-  const flingGesture = Gesture.Fling()
-    .direction(Directions.DOWN)
-    .numberOfPointers(1)
-    .onStart((e) => {})
+  const nextImageTransform = useSharedValue({ x: 0, y: 0 });
+
+  const nextImageStyle = useAnimatedStyle(() => {
+    return {
+      transform: [
+        { translateX: nextImageTransform.value.x },
+        { translateY: nextImageTransform.value.y },
+      ],
+    };
+  });
+
+  // const flingGesture = Gesture.Fling()
+  //   .direction(Directions.DOWN)
+  //   .numberOfPointers(1)
+  //   .onStart((e) => {})
+  //   .onEnd((e) => {
+  //     console.log("fling");
+  //     backgroundOpacity.value = withTiming(0, { duration: 100 });
+  //     position.value = withSequence(
+  //       withTiming(position.value + 50, { duration: 100 }, (e) => {
+  //         e && runOnJS(navigation.pop)();
+  //         e && runOnJS(forceCloseSheet)({ duration: 100 });
+  //       }),
+  //       withTiming(0, { duration: 100 })
+  //     );
+  //     // runOnJS(setShowModal)(true);
+  //   });
+
+  const minDist = 20;
+  const activeB = 20;
+  const toActive = [-activeB, activeB];
+
+  const nextPage = () => {
+    console.log("next22");
+    setTimeout(() => {
+      navigation.replace("Home", {
+        blockId: route.params.other.next?.blockId,
+        initialImageUrl: route.params.other.next?.initialImageUrl,
+        from: "Home",
+        other: {
+          next: {
+            blockId: route.params.other.next?.blockId,
+            initialImageUrl: route.params.other.next?.initialImageUrl,
+          },
+        },
+      });
+    }, 120);
+  };
+
+  const flingGestureDown = Gesture.Pan()
+    .minDistance(minDist)
+    .maxPointers(1)
+    .minPointers(1)
+    .failOffsetX(toActive)
+    .onStart((e) => {
+      position.value = 0;
+      isPanning.value = true;
+    })
+    .onUpdate((e) => {
+      position.value = e.translationY;
+      scale.value = 1 - e.translationY / 1000;
+    })
     .onEnd((e) => {
-      console.log("fling");
-      backgroundOpacity.value = withTiming(0, { duration: 100 });
-      position.value = withSequence(
-        withTiming(position.value + 50, { duration: 100 }, (e) => {
-          e && runOnJS(navigation.pop)();
-          e && runOnJS(forceCloseSheet)({ duration: 100 });
-        }),
-        withTiming(0, { duration: 100 })
-      );
-      // runOnJS(setShowModal)(true);
+      if (e.translationY > 100) {
+        console.log("dissmiss");
+
+        backgroundOpacity.value = withTiming(0, { duration: 100 });
+        scale.value = withTiming(0.3, { duration: 100 });
+        position.value = withTiming(700, { duration: 100 });
+
+        runOnJS(forceCloseSheet)({ duration: 100 });
+        runOnJS(popTimouted)();
+      } else {
+        isPanning.value = false;
+        position.value = 0;
+        scale.value = 1;
+      }
     });
 
-  const flingGestureNext = Gesture.Fling()
-    .direction(Directions.RIGHT)
-    .numberOfPointers(1)
-    .onStart((e) => {})
+  const flingGestureNext = Gesture.Pan()
+    .minDistance(minDist)
+    .maxPointers(1)
+    .minPointers(1)
+    .failOffsetY(toActive)
+    .onStart((e) => {
+      positionNext.value = 0;
+      isPanning.value = true;
+    })
+    .onUpdate((e) => {
+      nextImageTransform.value.x = -e.translationX;
+      positionNext.value = e.translationX;
+      // scale.value = 1 - e.translationY / 300;
+    })
     .onEnd((e) => {
-      console.log("fling", e);
+      if (-e.translationX > 50) {
+        console.log("next");
+        const measured = measure(ref);
+        positionNext.value = withTiming(-measured.width, { duration: 100 });
+        nextImageTransform.value.x = withTiming(measured.width, {
+          duration: 100,
+        });
+        runOnJS(nextPage)();
+      } else {
+        positionNext.value = withTiming(0, { duration: 100 });
+      }
     });
 
   const filngStyle = useAnimatedStyle(() => {
     return {
       // testing inace Y
-      transform: [{ translateY: position.value }],
+      transform: [
+        { translateY: position.value },
+        { translateX: positionNext.value },
+      ],
     };
   });
 
@@ -225,6 +870,7 @@ export const Home: FC<NativeStackScreenProps<Routes, "Home">> = ({
     .averageTouches(true)
     .maxPointers(2)
     .minPointers(2)
+    .onStart((event) => {})
     .onChange((event) => {
       if (!isPinching.value) return;
       translation.value = {
@@ -235,6 +881,8 @@ export const Home: FC<NativeStackScreenProps<Routes, "Home">> = ({
     .onEnd(() => {
       // let matrix = identity3;
       translation.value = { x: 0, y: 0 };
+      origin.value = { x: 0, y: 0 };
+
       // matrix = translateMatrix(
       //   matrix,
       //   translation.value.x,
@@ -331,7 +979,8 @@ export const Home: FC<NativeStackScreenProps<Routes, "Home">> = ({
     //   };
 
     let timingConfig = {
-      duration: isPinching.value ? 0 : 100,
+      duration:
+        isPinching.value || isPanning.value ? 0 : scale.value < 1 ? 34 : 100,
       easing: Easing.ease,
     } as WithTimingConfig;
 
@@ -368,10 +1017,11 @@ export const Home: FC<NativeStackScreenProps<Routes, "Home">> = ({
   });
 
   const gesturesCobined = Gesture.Exclusive(
-    longPressGesture,
-    Gesture.Simultaneous(pinch, pan),
+    // longPressGesture,
+    Gesture.Race(flingGestureNext, flingGestureDown),
+    Gesture.Simultaneous(pinch, pan)
 
-    flingGesture
+    // flingGesture
   );
 
   const backgroundStyle = useAnimatedStyle(() => {
@@ -400,13 +1050,6 @@ export const Home: FC<NativeStackScreenProps<Routes, "Home">> = ({
 
   // callbacks
 
-  const handleSnapPress = useCallback((index) => {
-    sheetRef.current?.snapToIndex(index);
-  }, []);
-  const handleClosePress = useCallback(() => {
-    sheetRef.current?.close();
-  }, []); // render
-
   const renderItem = useCallback(
     (item: typeof data[0]) => (
       <Div key={item.option} className={`px-0 my-1 mx-2`}>
@@ -418,52 +1061,59 @@ export const Home: FC<NativeStackScreenProps<Routes, "Home">> = ({
 
   useEffect(() => {
     let t;
+
     navigation.addListener("beforeRemove", (e) => {
-      console.log("beforeRemove");
+      if ((e.data.action.payload as any)?.name === "Home") {
+        return;
+      } else {
+        e.preventDefault();
+        console.log("beforeRemove");
 
-      e.preventDefault();
-
-      backgroundOpacity.value = withTiming(0, { duration: 100 });
-      position.value = withSequence(
-        withTiming(position.value + 50, { duration: 100 }, (e) => {}),
-        withTiming(0, { duration: 100 })
-      );
-      opacity.value = withTiming(0, { duration: 200 }, () => {});
-      t = setTimeout(() => {
-        navigation.dispatch(e.data.action);
-      }, 200);
+        backgroundOpacity.value = withTiming(0, { duration: 100 });
+        (position.value = withTiming(
+          position.value + 50,
+          { duration: 100 },
+          (e) => {}
+        )),
+          (opacity.value = withTiming(0, { duration: 200 }, () => {}));
+        t = setTimeout(() => {
+          navigation.dispatch(e.data.action);
+        }, 200);
+      }
     });
 
     return () => {
+      console.log("unmounted");
+
       clearTimeout(t);
       navigation.removeListener("beforeRemove", () => {});
     };
   }, []);
 
   return (
-    <AnimatedDiv
-      style={backgroundStyle}
+    <Animated.View
+      style={[{ flex: 1, backgroundColor: "#00000044" }, backgroundStyle]}
       collapsable={false}
-      className={`flex-1 bg-[#000000b7]`}
     >
       <Div className="flex relative flex-1 flex-col justify-start">
         <GestureDetector gesture={gesturesCobined}>
           <Animated.View
-            ref={ref as any}
             collapsable={false}
             style={[
               {
                 height: "80%",
-                width: "100%",
-                // backgroundColor: "red",
+                width: "200%",
+                flexDirection: "row",
+                // backgroundColor: "pink",
               },
-              animatedStyle,
               filngStyle,
             ]}
           >
-            <Img
+            <AnimatedImage
+              ref={ref as any}
               placeholderContentFit="contain"
-              style={{ flex: 1, marginHorizontal: 6, zIndex: 77 }}
+              recyclingKey={block?.image_url + "current"}
+              style={[{ flex: 1, zIndex: 77 }, animatedStyle]}
               contentFit={"contain"}
               placeholder={{
                 uri: initialImageUrl,
@@ -475,7 +1125,45 @@ export const Home: FC<NativeStackScreenProps<Routes, "Home">> = ({
                 // uri: "https://d2w9rnfcy7mm78.cloudfront.net/6651769/original_049ed5752c0df4cfc123a37120132c37.jpg?1585600664?bc=0 ",
                 // uri: "https://t2.genius.com/unsafe/1000x1000/https%3A%2F%2Fimages.genius.com%2F7cf1f8cf1fc63990f3bcd02fe5d52be7.1000x1000x1.png",
               }}
-            ></Img>
+            ></AnimatedImage>
+            <AnimatedImage
+              recyclingKey={route.params.other.next.initialImageUrl + "next"}
+              placeholderContentFit="contain"
+              style={[
+                {
+                  flex: 1,
+                  zIndex: 77,
+                },
+                // animatedStyle,
+                nextImageStyle,
+              ]}
+              contentFit={"contain"}
+              // placeholder={{
+              //   uri: initialImageUrl,
+              // }}
+              source={{
+                // uri: block ? block.image_url : initialImageUrl,
+                uri: route.params.other.next.initialImageUrl,
+                // uri: initialImageUrl,
+                // uri: "https://d2w9rnfcy7mm78.cloudfront.net/6651769/original_049ed5752c0df4cfc123a37120132c37.jpg?1585600664?bc=0 ",
+                // uri: "https://t2.genius.com/unsafe/1000x1000/https%3A%2F%2Fimages.genius.com%2F7cf1f8cf1fc63990f3bcd02fe5d52be7.1000x1000x1.png",
+              }}
+            ></AnimatedImage>
+            {/* <Img
+              placeholderContentFit="contain"
+              style={{ flex: 1, marginHorizontal: 6, zIndex: 77 }}
+              contentFit={"contain"}
+              placeholder={{
+                uri: initialImageUrl,
+              }}
+              source={{
+                // uri: block ? block.image_url : initialImageUrl,
+                // uri: block?.image_url,
+                // uri: initialImageUrl,
+                uri: "https://d2w9rnfcy7mm78.cloudfront.net/6651769/original_049ed5752c0df4cfc123a37120132c37.jpg?1585600664?bc=0 ",
+                // uri: "https://t2.genius.com/unsafe/1000x1000/https%3A%2F%2Fimages.genius.com%2F7cf1f8cf1fc63990f3bcd02fe5d52be7.1000x1000x1.png",
+              }}
+            ></Img> */}
           </Animated.View>
         </GestureDetector>
 
@@ -575,6 +1263,7 @@ export const Home: FC<NativeStackScreenProps<Routes, "Home">> = ({
         animatedIndex={sheetAnimatedIndex}
         animatedPosition={sheetAnimatedPosition}
         index={0}
+        animateOnMount={from === "Explore"}
         ref={sheetRef}
         snapPoints={initialSnapPoints}
       >
@@ -602,6 +1291,9 @@ export const Home: FC<NativeStackScreenProps<Routes, "Home">> = ({
           {data.map(renderItem)}
         </Div>
       </BottomSheet>
-    </AnimatedDiv>
+    </Animated.View>
   );
 };
+function useCardAnimation(): { current: any } {
+  throw new Error("Function not implemented.");
+}

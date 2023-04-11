@@ -6,6 +6,49 @@ import { FC, useRef } from "react";
 import { Pressable } from "react-native";
 import { useInfiniteQuery } from "react-query";
 
+export interface Data {
+  contents: Content[];
+}
+export interface Content {
+  __typename: string;
+  id: number;
+  href: string;
+  counts: Counts;
+  title: string;
+  alt_text: any;
+  src: string;
+  src_1x: string;
+  src_2x: string;
+  src_3x: string;
+  original_dimensions: OriginalDimensions;
+  updated_at: string;
+  user: User;
+  connection: any;
+  source: Source;
+}
+
+export interface Counts {
+  comments: number;
+  __typename: string;
+}
+
+export interface OriginalDimensions {
+  width?: number;
+  height?: number;
+  __typename: string;
+}
+
+export interface User {
+  id: number;
+  name: string;
+  __typename: string;
+}
+
+export interface Source {
+  url?: string;
+  __typename: string;
+}
+
 const fetcher = async (pageNumber: number = 0) => {
   console.log("fetching page", pageNumber);
 
@@ -32,7 +75,28 @@ const fetcher = async (pageNumber: number = 0) => {
       mode: "cors",
       credentials: "omit",
     });
-    const data = await response.json();
+    const data = (await response.json()) as { data: Data };
+
+    data.data.contents = data.data.contents.filter((im) => {
+      const url = im.src;
+
+      const urlParts = url?.split("/");
+      const protocolAndDomain = urlParts?.slice(0, 3).join("/");
+      const pathname = url
+        ?.replace(protocolAndDomain, "")
+        ?.split("?")[0]
+        ?.split("/")[1];
+
+      let drop = true;
+
+      try {
+        const st = Buffer.from(pathname, "base64").toString();
+        if (st.includes("png") || st.includes("jpg")) drop = false;
+      } catch (error) {
+        drop = true;
+      }
+      return !drop;
+    });
 
     return { data: data.data.contents, nextPage: pageNumber + 1 };
   } catch (error) {
@@ -53,7 +117,7 @@ export function useImages() {
     isRefetching,
     fetchNextPage,
   } = useInfiniteQuery(
-    ["dogs"],
+    ["blocks"],
     (page) => {
       console.log("fetching page", page);
       return fetcher(page.pageParam);
@@ -79,7 +143,7 @@ export function useImages() {
 
 import { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { Routes } from "../App";
-import { Div, T } from "./shared";
+import { Div, T, useBlockStore } from "./shared";
 
 export const Explore: FC<NativeStackScreenProps<Routes, "Explore">> = ({
   navigation,
@@ -96,26 +160,7 @@ export const Explore: FC<NativeStackScreenProps<Routes, "Explore">> = ({
   } = useImages();
 
   const img = data?.pages?.flatMap((page, i) => {
-    return page.data.filter((im) => {
-      const url = im.src;
-
-      const urlParts = url.split("/");
-      const protocolAndDomain = urlParts.slice(0, 3).join("/");
-      const pathname = url
-        .replace(protocolAndDomain, "")
-        .split("?")[0]
-        .split("/")[1];
-
-      let drop = true;
-
-      try {
-        const st = Buffer.from(pathname, "base64").toString();
-        if (st.includes("png") || st.includes("jpg")) drop = false;
-      } catch (error) {
-        drop = true;
-      }
-      return !drop;
-    });
+    return page?.data;
   });
 
   const loadMore = hasNextPage ? fetchNextPage : undefined;
@@ -166,9 +211,19 @@ export const Explore: FC<NativeStackScreenProps<Routes, "Explore">> = ({
           <Pressable
             style={{ aspectRatio: 1, flex: 1 }}
             onPress={() => {
+              console.log("pressed", item.id);
+
+              useBlockStore.setState({ currentBlock: item.id });
               navigation.push("Home", {
-                blockId: item.id,
+                blockId: item.id.toString(),
+                from: "Explore",
                 initialImageUrl: item.src_3x,
+                other: {
+                  next: {
+                    blockId: img[index + 1]?.id,
+                    initialImageUrl: img[index + 1]?.src_3x,
+                  },
+                },
               });
               // Linking.openURL(`https://are.na${item.href}`);
             }}

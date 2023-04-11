@@ -1,11 +1,18 @@
-import { NavigationContainer } from "@react-navigation/native";
+import { NavigationContainer, useTheme } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { Explore } from "./features/explore";
 
+interface ImageBlock {
+  blockId: number;
+  initialImageUrl: string;
+}
+
 export type Routes = {
-  Home: {
-    blockId: string;
-    initialImageUrl: string;
+  Home: ImageBlock & {
+    from: "Explore" | "Home";
+    other: {
+      next: ImageBlock;
+    };
   };
   Details: { userId: string; otherParam: string };
   Explore: undefined;
@@ -24,11 +31,27 @@ import { queryClient } from "./features/shared";
 const Stack = createNativeStackNavigator<Routes>();
 
 export default function App() {
+  const { colors } = useTheme();
+  colors.background = "transparent";
+
   return (
     <QueryClientProvider client={queryClient}>
       <GestureHandlerRootView style={{ flex: 1 }}>
         <StatusBar translucent style="light" backgroundColor="#00000077" />
-        <NavigationContainer>
+        <NavigationContainer
+
+        // theme={{
+        //   colors: {
+        //     background: "transparent",
+        //     border: "transparent",
+        //     card: "transparent",
+        //     notification: "transparent",
+        //     primary: "transparent",
+        //     text: "transparent",
+        //   },
+        //   dark: false,
+        // }}
+        >
           <Stack.Navigator initialRouteName="Explore">
             <Stack.Screen
               name="Explore"
@@ -40,8 +63,9 @@ export default function App() {
               options={{
                 ...defaultScreenOptions,
                 presentation: "transparentModal",
+                contentStyle: { backgroundColor: "transparent" },
                 animation: "none",
-                animationDuration: 0,
+                statusBarAnimation: "none",
               }}
               component={Home}
             />
