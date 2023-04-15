@@ -3,7 +3,7 @@ import { Image as ExpoImage } from "expo-image";
 import { FlashList } from "@shopify/flash-list";
 import { Buffer } from "buffer";
 import { FC, useRef } from "react";
-import { Pressable } from "react-native";
+import { Easing, Pressable } from "react-native";
 import { useInfiniteQuery } from "react-query";
 
 export interface Data {
@@ -50,7 +50,7 @@ export interface Source {
 }
 
 const fetcher = async (pageNumber: number = 0) => {
-  console.log("fetching page", pageNumber);
+  // console.log("fetching page", pageNumber);
 
   try {
     const response = await fetch("https://api.are.na/graphql", {
@@ -142,8 +142,54 @@ export function useImages() {
 }
 
 import { NativeStackScreenProps } from "@react-navigation/native-stack";
+import {
+  SharedValue,
+  useAnimatedStyle,
+  useDerivedValue,
+  useSharedValue,
+  withTiming,
+} from "react-native-reanimated";
 import { Routes } from "../App";
-import { Div, T, useBlockStore } from "./shared";
+import { Plus } from "../icons/plus";
+import { useImageViewerStore } from "./home";
+import { AnimatedDiv, Div, T } from "./shared";
+
+interface AddButtonProps {
+  children?: React.ReactNode | React.ReactNode[];
+  scrollY: SharedValue<number>;
+}
+
+export const AddButton = ({ children, scrollY }: AddButtonProps) => {
+  const velNeeded = 0.3;
+
+  const isDown = useDerivedValue(() => {
+    ("worklet");
+    if (scrollY.value < -velNeeded) {
+      return 0;
+    } else if (scrollY.value > velNeeded) {
+      return 100;
+    }
+  });
+
+  const addButtonStyle = useAnimatedStyle(() => {
+    return {
+      translateY: withTiming(isDown.value, {
+        duration: 100,
+        easing: Easing.inOut(Easing.ease),
+      }),
+    };
+  });
+
+  return (
+    <AnimatedDiv
+      className={`absolute bg-black flex flex-row justify-center items-center px-6 py-3 border border-white z-20 bottom-5 right-5`}
+      style={addButtonStyle}
+    >
+      <Plus style={{ height: 24, width: 24 }} stroke={"#fff"} />
+      <T className={`text-white ml-2`}>Add to Are.na</T>
+    </AnimatedDiv>
+  );
+};
 
 export const Explore: FC<NativeStackScreenProps<Routes, "Explore">> = ({
   navigation,
@@ -166,54 +212,27 @@ export const Explore: FC<NativeStackScreenProps<Routes, "Explore">> = ({
   const loadMore = hasNextPage ? fetchNextPage : undefined;
   const flashListRef = useRef<FlashList<any>>(null);
 
-  // const scrollY = useSharedValue(0);
-  // const velNeeded = 0.3;
+  const scrollY = useSharedValue(0);
 
-  // const isDown = useSharedValue(false);
-
-  // useDerivedValue(() => {
-  //   if (scrollY.value < -velNeeded) {
-  //     isDown.value = false;
-  //   } else if (scrollY.value > velNeeded) {
-  //     isDown.value = true;
-  //   }
-  // });
-
-  // const addButtonStyle = useAnimatedStyle(() => {
-  //   return {
-  //     translateY: withTiming(isDown.value ? 100 : 0, {
-  //       duration: 100,
-  //       easing: Easing.inOut(Easing.ease),
-  //     }),
-  //     opacity: 0.9,
-  //   };
-  // });
+  const store = useImageViewerStore((t) => t.setCurrentBlock);
 
   return (
     <Div className="" style={{ flex: 1, backgroundColor: "black" }}>
-      {/* <AnimatedDiv
-        style={addButtonStyle}
-        className={`absolute bg-black flex flex-row justify-center items-center px-6 py-3 border border-white z-20 bottom-5 right-5`}
-      >
-        <Plus style={{ height: 24, width: 24 }} stroke={"#fff"} />
-        <T className={`text-white ml-2`}>Add to Are.na</T>
-      </AnimatedDiv> */}
+      {/* <AddButton scrollY={scrollY} /> */}
       <FlashList
         data={img}
         contentContainerStyle={{ paddingTop: 30 }}
         ref={flashListRef}
-        // onScroll={(e) => {
-        //   scrollY.value = e.nativeEvent.velocity.y;
-        // }}
+        onScroll={(e) => {
+          scrollY.value = e.nativeEvent.velocity.y;
+        }}
         numColumns={2}
         // keyExtractor={(item) => item.id.toString()}
         renderItem={({ item, index, target }) => (
           <Pressable
             style={{ aspectRatio: 1, flex: 1 }}
             onPress={() => {
-              console.log("pressed", item.id);
-
-              useBlockStore.setState({ currentBlock: item.id });
+              store(item.id.toString());
               navigation.push("Home", {
                 blockId: item.id.toString(),
                 from: "Explore",

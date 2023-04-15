@@ -8,6 +8,7 @@ interface ImageBlock {
 }
 
 export type Routes = {
+  Test: undefined;
   Home: ImageBlock & {
     from: "Explore" | "Home";
     other: {
@@ -20,11 +21,13 @@ export type Routes = {
 
 const defaultScreenOptions = {
   headerShown: false,
+  animation: "none",
 };
 
 import { StatusBar } from "expo-status-bar";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { QueryClientProvider } from "react-query";
+import { Car } from "./features/car";
 import { Home } from "./features/home";
 import { queryClient } from "./features/shared";
 
@@ -55,8 +58,19 @@ export default function App() {
           <Stack.Navigator initialRouteName="Explore">
             <Stack.Screen
               name="Explore"
-              options={defaultScreenOptions}
+              options={{
+                ...defaultScreenOptions,
+                animation: "none",
+              }}
               component={Explore}
+            />
+            <Stack.Screen
+              name="Test"
+              options={{
+                ...defaultScreenOptions,
+                animation: "none",
+              }}
+              component={Car}
             />
             <Stack.Screen
               name="Home"

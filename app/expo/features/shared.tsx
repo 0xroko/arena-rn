@@ -1,10 +1,11 @@
 import { Image } from "expo-image";
 import { styled } from "nativewind";
-import { useMemo } from "react";
+import { MutableRefObject, createContext, createRef, useMemo } from "react";
 import { Text, View } from "react-native";
 import Animated, {
   Easing,
   SharedTransition,
+  SharedValue,
   WithTimingConfig,
   withTiming,
 } from "react-native-reanimated";
@@ -34,6 +35,8 @@ const originTimingConfig = {
   easing: Easing.ease,
 } as WithTimingConfig;
 
+export const BACKDROP_OPACITY = 0.8;
+
 export const transition = SharedTransition.custom((values) => {
   "worklet";
   return {
@@ -44,10 +47,13 @@ export const transition = SharedTransition.custom((values) => {
   };
 });
 
-import { create } from "zustand";
+import BottomSheet from "@gorhom/bottom-sheet";
+import { createStore } from "zustand";
 import { Content } from "./explore";
 export const blockFetcher = async (blockId: string) => {
-  const response = await fetch("  ", {
+  // console.log("fetch blockId", blockId);
+
+  const response = await fetch("https://api.are.na/graphql", {
     headers: {
       accept: "*/*",
       "accept-language": "en-US,en;q=0.9,hr-HR;q=0.8,hr;q=0.7,bs;q=0.6",
@@ -73,24 +79,58 @@ export const blockFetcher = async (blockId: string) => {
   return data.data.block as Block;
 };
 
-interface BlockStore {
+export interface BlockStoreExternal {
+  sheetAnimatedPosition?: SharedValue<number>;
+  backgroundOpacity?: SharedValue<number>;
+  imageScale?: SharedValue<number>;
+  imageOpacity?: SharedValue<number>;
+  imageTranslationX?: SharedValue<number>;
+  sheetRef: MutableRefObject<BottomSheet | null>;
+}
+
+export interface BlockStore extends BlockStoreExternal {
   currentBlock: number;
   initialBlock: number;
   mounted: boolean;
   setCurrentBlock: (block: any) => void;
   setMounted: (mounted: boolean) => void;
+  mountAnimation: () => void;
+  exitAnimation?: (duration?: number) => void;
 }
 
-export const useBlockStore = create<BlockStore>((set, get) => ({
-  currentBlock: -1,
-  initialBlock: -1,
-  mounted: false,
-  setMounted: (mounted) => set({ mounted }),
-  setCurrentBlock: (block) => {
-    set({ currentBlock: block });
-    if (get().initialBlock === -1) set({ initialBlock: block });
-  },
-}));
+export const createBlockStore = (external: BlockStoreExternal) => {
+  const DEFAULT_PROPS = {
+    currentBlock: -1,
+    initialBlock: -1,
+    mounted: false,
+  };
+
+  return createStore<BlockStore>()((set, get) => ({
+    ...DEFAULT_PROPS,
+    ...external,
+    exitAnimation: (duration = 200) => {
+      get().backgroundOpacity.value = withTiming(0, { duration });
+      get().imageOpacity.value = withTiming(0, { duration });
+      // get().imageScale.value = withTiming(1, { duration });
+
+      get().sheetRef?.current?.forceClose();
+    },
+    mountAnimation: () => {
+      set({ mounted: true });
+      get().backgroundOpacity.value = withTiming(BACKDROP_OPACITY, {
+        duration: 200,
+      });
+      get().imageOpacity.value = withTiming(1, { duration: 2 });
+      get().sheetRef.current?.expand();
+    },
+    setMounted: (mounted) => set({ mounted }),
+    setCurrentBlock: (block) => {
+      // console.log("setCurrentBlock", block);
+      set({ currentBlock: block });
+      if (get().initialBlock === -1) set({ initialBlock: block });
+    },
+  }));
+};
 
 export interface Block {
   __typename: string;
@@ -181,6 +221,8 @@ export const useExploreState = (blockId?: any) => {
 
     const next = pages[currentIndex + 1] as Content;
 
+    console.log("currentIndex", currentIndex);
+
     return {
       currentIndex,
       current: pages[currentIndex] as Content,
@@ -190,7 +232,7 @@ export const useExploreState = (blockId?: any) => {
   }, [blockId]);
 
   const prefetchBlock = async (blockId?: any) => {
-    await queryClient.prefetchQuery(["block", blockId], () =>
+    await queryClient.prefetchQuery(["block", blockId?.toString()], () =>
       blockFetcher(blockId)
     );
   };
@@ -199,4 +241,40 @@ export const useExploreState = (blockId?: any) => {
     ...d,
     prefetchBlock,
   };
+};
+
+interface BearProps {
+  bears: number;
+}
+
+interface BearState extends BearProps {
+  addBear: () => void;
+}
+
+type BearStore = ReturnType<typeof createBearStore>;
+
+const createBearStore = (initProps?: Partial<BearProps>) => {
+  const DEFAULT_PROPS: BearProps = {
+    bears: 0,
+  };
+  return createStore<BearState>()((set) => ({
+    ...DEFAULT_PROPS,
+    ...initProps,
+    addBear: () => set((state) => ({ bears: ++state.bears })),
+  }));
+};
+
+export const BearContext = createContext<BearStore | null>(null);
+
+import { makeMutable } from "react-native-reanimated/src/reanimated2/core";
+
+export const createSharedValue = <T,>(init: T, oneWayReadsOnly = false) => {
+  const ref = createRef<SharedValue<T> | null>();
+
+  if (ref.current === null) {
+    // @ts-ignore
+    ref.current = makeMutable(init, oneWayReadsOnly);
+  }
+
+  return ref.current;
 };
