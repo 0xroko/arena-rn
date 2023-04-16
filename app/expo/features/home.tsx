@@ -21,6 +21,7 @@ import Animated, {
   runOnJS,
   useAnimatedRef,
   useAnimatedStyle,
+  useDerivedValue,
   useSharedValue,
   withTiming,
 } from "react-native-reanimated";
@@ -111,18 +112,25 @@ export const ImageViewer = ({
     y: 0,
   });
   const nextImageTranslationX = useSharedValue(0);
-  const nextImageTranslationY = useSharedValue(0);
   const prevImageTranslationX = useSharedValue(0);
   const panTranslationX = useSharedValue(0);
   const panTranslationY = useSharedValue(0);
-  const ref = useAnimatedRef();
+  const imageAnimatedRef = useAnimatedRef();
   const panScale = useSharedValue(1);
 
-  const animateOnMount = useImageViewerStore((t) => t.mounted);
+  const isTransitioning = useSharedValue(false);
 
   const sheetAnimatedPosition = useImageViewerStore(
     (t) => t.sheetAnimatedPosition
   );
+
+  const sheetAnimatedPositionDerived = useDerivedValue(() => {
+    if (sheetAnimatedPosition.value < 0) {
+      return 0;
+    }
+
+    return sheetAnimatedPosition.value;
+  });
 
   const DISABLED_NEXT =
     nextImage === undefined && initialNextImage === undefined;
@@ -130,14 +138,11 @@ export const ImageViewer = ({
     previousImage === undefined && initialPreviousImage === undefined;
 
   const sheetRef = useImageViewerStore((t) => t.sheetRef);
-
-  const closeSheet = sheetRef.current?.forceClose;
-  const snapToIndex = sheetRef.current?.snapToIndex;
-
   const imageOpacity = useImageViewerStore((t) => t.imageOpacity);
   const backgroundOpacity = useImageViewerStore((t) => t.backgroundOpacity);
 
-  const timeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const sheetForceClose = sheetRef.current?.forceClose;
+  const sheetSnapToIndex = sheetRef.current?.snapToIndex;
 
   const cancelTimeoutAndStop = () => {
     if (timeoutRef.current) {
@@ -147,15 +152,12 @@ export const ImageViewer = ({
     }
   };
 
+  const timeoutRef = useRef<NodeJS.Timeout | null>(null);
+
   const timeout = (fn: () => void | undefined, ms: number) => {
     return () => {
       if (timeoutRef.current) {
         cancelTimeoutAndStop();
-        console.log("reseting motin values");
-
-        // panTranslationX.value = 0;
-        // nextImageTranslationX.value = 0;
-        // prevImageTranslationX.value = 0;
       } else {
         timeoutRef.current = setTimeout(() => {
           fn();
@@ -165,17 +167,12 @@ export const ImageViewer = ({
     };
   };
 
-  const IMAGE_TRANSITION_DURATION = 200;
+  const IMAGE_TRANSITION_DURATION = 190;
+  const PAN_DISSMISS_TRASHOLD = width * 0.09;
 
-  const onNextTimeout = timeout(onNext, IMAGE_TRANSITION_DURATION);
-
-  const onPreviousTimeout = timeout(onPrevious, IMAGE_TRANSITION_DURATION);
-
+  const onNextTimeout = timeout(onNext, IMAGE_TRANSITION_DURATION - 30);
+  const onPreviousTimeout = timeout(onPrevious, IMAGE_TRANSITION_DURATION - 30);
   const dismissTimeout = timeout(onDismiss, 120);
-
-  const PAN_DISSMISS_TRASHOLD = width * 0.3;
-
-  const isTransitioning = useSharedValue(false);
 
   const flingGestureDown = Gesture.Pan()
     .minDistance(minDist)
@@ -187,8 +184,10 @@ export const ImageViewer = ({
       panTranslationY.value = 0;
       isPanning.value = true;
       panScale.value = 1;
+      runOnJS(sheetForceClose)({ duration: 100 });
     })
     .onUpdate((e) => {
+      if (isTransitioning.value) return;
       panTranslationY.value = e.translationY;
 
       backgroundOpacity.value = interpolate(
@@ -213,17 +212,17 @@ export const ImageViewer = ({
       );
     })
     .onEnd((e) => {
-      isPanning.value = false;
+      isTransitioning.value = true;
 
       if (e.translationY > PAN_DISSMISS_TRASHOLD) {
-        runOnJS(closeSheet)({ duration: 200 });
         runOnJS(dismissTimeout)();
 
-        // other animations are handled by exitanimation
         panScale.value = withTiming(0, { duration: 120 });
         panTranslationY.value = withTiming(e.y + 400, { duration: 120 });
+        backgroundOpacity.value = withTiming(0, { duration: 120 });
+        imageOpacity.value = withTiming(0, { duration: 120 });
       } else {
-        console.log("reset");
+        runOnJS(sheetSnapToIndex)(0, { duration: 100 });
 
         backgroundOpacity.value = withTiming(BACKDROP_OPACITY, {
           duration: 100,
@@ -232,9 +231,12 @@ export const ImageViewer = ({
         panTranslationY.value = withTiming(0, { duration: 100 });
         panScale.value = withTiming(1, { duration: 100 });
       }
+
+      isPanning.value = false;
     });
 
-  const VELOCITY_TRASHOLD = 1300;
+  const VELOCITY_THRESHOLD = 1300;
+  const TRANSLATION_THRESHOLD = width * 0.07;
 
   const beginOffset = useSharedValue(0);
   const nextBeginOffset = useSharedValue(0);
@@ -243,32 +245,15 @@ export const ImageViewer = ({
   const flingGestureNext = Gesture.Pan()
     .minDistance(minDist)
     .maxPointers(1)
+    .cancelsTouchesInView(false)
     .minPointers(1)
     .failOffsetY(failOffsetRange)
     .failOffsetX(failOffsetOpposite)
     .onStart((e) => {
       runOnJS(cancelTimeoutAndStop)();
-      // cancelAnimation(nextImageTranslationX);
-      // cancelAnimation(prevImageTranslationX);
-      // cancelAnimation(panTranslationX);
       beginOffset.value = panTranslationX.value;
       nextBeginOffset.value = nextImageTranslationX.value;
       prevBeginOffset.value = prevImageTranslationX.value;
-
-      // if (nextBeginOffset.value === 0) nextBeginOffset.value = 20;
-      // if (prevBeginOffset.value === 0) prevBeginOffset.value = -20;
-
-      // panTranslationX.value = withTiming(
-      //   e.translationX + panTranslationX.value,
-      //   { duration: 2000 }
-      // );
-      // nextImageTranslationX.value = 0;
-      // prevImageTranslationX.value = 0;
-      // panTranslationX.value = beginOffset.value + e.translationX;
-      // if (nextBeginOffset.value != 0)
-      //   nextImageTranslationX.value = nextBeginOffset.value + e.translationX;
-      // if (prevBeginOffset.value != 0)
-      //   prevImageTranslationX.value = prevBeginOffset.value + e.translationX;
       isPanning.value = true;
     })
     .onUpdate((e) => {
@@ -293,19 +278,15 @@ export const ImageViewer = ({
     .onEnd((e) => {
       const realTrnaslationX = e.translationX + beginOffset.value;
 
-      const nextRealTranslationX = e.translationX + nextBeginOffset.value;
-      const prevRealTranslationX = e.translationX + prevBeginOffset.value;
-
-      let TRANSLATION_TRASHOLD = width * 0.07;
-
       isPanning.value = false;
       if (
-        (-realTrnaslationX > TRANSLATION_TRASHOLD ||
-          e.velocityX < -VELOCITY_TRASHOLD) &&
+        (realTrnaslationX < -TRANSLATION_THRESHOLD ||
+          e.velocityX < -VELOCITY_THRESHOLD) &&
         !DISABLED_NEXT &&
         isTransitioning.value === false
       ) {
-        const measured = measure(ref);
+        const measured = measure(imageAnimatedRef);
+
         isTransitioning.value = true;
         panTranslationX.value = withTiming(-measured.width, {
           duration: IMAGE_TRANSITION_DURATION,
@@ -319,14 +300,14 @@ export const ImageViewer = ({
 
         runOnJS(onNextTimeout)();
       } else if (
-        (realTrnaslationX > TRANSLATION_TRASHOLD ||
-          e.velocityX > VELOCITY_TRASHOLD) &&
+        (realTrnaslationX > TRANSLATION_THRESHOLD ||
+          e.velocityX > VELOCITY_THRESHOLD) &&
         !DISABLED_PREVIOUS &&
         isTransitioning.value === false
       ) {
         isTransitioning.value = true;
 
-        const measured = measure(ref);
+        const measured = measure(imageAnimatedRef);
         panTranslationX.value = withTiming(measured.width, {
           duration: IMAGE_TRANSITION_DURATION,
         });
@@ -371,20 +352,26 @@ export const ImageViewer = ({
 
   const pinch = Gesture.Pinch()
     .onStart((event) => {
-      const measured = measure(ref);
+      const measured = measure(imageAnimatedRef);
+
       isPinching.value = true;
-      runOnJS(closeSheet)({ duration: 150 });
+      backgroundOpacity.value = withTiming(BACKDROP_OPACITY + 0.1, {
+        duration: 300,
+      });
       pinchOrigin.value = {
         x: event.focalX - measured.width / 2,
         y: event.focalY - measured.height / 2,
       };
+      runOnJS(sheetForceClose)({ duration: 200 });
     })
     .onBegin((event) => {})
     .onChange((event) => {
       pinchScale.value = event.scale;
     })
     .onEnd(() => {
-      runOnJS(snapToIndex)(0, { duration: 150 });
+      backgroundOpacity.value = withTiming(BACKDROP_OPACITY, { duration: 200 });
+
+      runOnJS(sheetSnapToIndex)(0, { duration: 150 });
       pinchScale.value = 1;
       isPinching.value = false;
     });
@@ -431,19 +418,23 @@ export const ImageViewer = ({
     }
 
     let timingConfig = {
-      duration: isPinching.value || isPanning.value ? 0 : 100,
+      duration: isPinching.value || isPanning.value ? 0 : 140,
       easing: Easing.ease,
     } as WithTimingConfig;
 
     let scaleFactor = 1;
 
-    // so that closing the sheet doesn't scale the image
-    if (sheetAnimatedPosition.value > 0.0) {
+    if (sheetAnimatedPositionDerived.value > 0.0) {
       timingConfig.duration = 0;
-      scaleFactor = interpolate(sheetAnimatedPosition.value, [0, 1], [1, 0.9], {
-        extrapolateLeft: Extrapolate.CLAMP,
-        extrapolateRight: Extrapolate.CLAMP,
-      });
+      scaleFactor = interpolate(
+        sheetAnimatedPositionDerived.value,
+        [0, 1],
+        [1, 0.9],
+        {
+          extrapolateLeft: Extrapolate.CLAMP,
+          extrapolateRight: Extrapolate.CLAMP,
+        }
+      );
     }
 
     if (isTransitioning.value) return;
@@ -463,7 +454,6 @@ export const ImageViewer = ({
   });
 
   const panStyle = useAnimatedStyle(() => {
-    // console.log(panTranslationX.value);
     return {
       opacity: imageOpacity.value,
 
@@ -477,15 +467,11 @@ export const ImageViewer = ({
 
   const nextImageStyle = useAnimatedStyle(() => {
     return {
-      transform: [
-        { translateX: nextImageTranslationX.value },
-        { translateY: nextImageTranslationY.value },
-      ],
+      transform: [{ translateX: nextImageTranslationX.value }],
     };
   });
 
   const prevImageStyle = useAnimatedStyle(() => {
-    // const measured = measure(ref);
     return {
       transform: [{ translateX: -width + prevImageTranslationX.value }],
     };
@@ -511,7 +497,7 @@ export const ImageViewer = ({
         ]}
       >
         <AnimatedImage
-          ref={ref as any}
+          ref={imageAnimatedRef as any}
           placeholderContentFit="contain"
           style={[
             {
@@ -539,7 +525,7 @@ export const ImageViewer = ({
           }}
         ></AnimatedImage>
         <AnimatedImage
-          ref={ref as any}
+          ref={imageAnimatedRef as any}
           placeholderContentFit="contain"
           style={[
             {
@@ -813,7 +799,8 @@ export const Home: FC<NativeStackScreenProps<Routes, "Home">> = ({
     mountAnimation();
     let t;
     navigation.addListener("beforeRemove", (e) => {
-      if ((e.data.action.payload as any)?.name === "Home") {
+      // source will only exist when onBack is called
+      if (Object.keys(e.data.action).indexOf("source") !== -1) {
         return;
       } else {
         e.preventDefault();

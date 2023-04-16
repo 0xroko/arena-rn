@@ -55,7 +55,7 @@ export default function App() {
         //   dark: false,
         // }}
         >
-          <Stack.Navigator initialRouteName="Explore">
+          <Stack.Navigator initialRouteName="Test">
             <Stack.Screen
               name="Explore"
               options={{
