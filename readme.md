@@ -19,4 +19,4 @@ Simple React Native client for [Are.na](https://www.are.na/). Also there are few
 - [auth/](auth/) - Contains basic OAuth service for Are.na login
 - [app/](app/) - Main RN app
 
-<video src=".github/demo.mp4" width="100%" style="max-width:350px;" controls></video>
+https://github.com/0xroko/arena-rn/assets/55251261/89bf1176-e450-4e74-9939-2155b63918b0
