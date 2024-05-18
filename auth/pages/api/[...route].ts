@@ -1,5 +1,7 @@
 import { Hono } from "hono";
 import { cors } from "hono/cors";
+import { handle } from "hono/vercel";
+import { z } from "zod";
 
 export const config = {
 	runtime: "edge",
