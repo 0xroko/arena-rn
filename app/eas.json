@@ -1,0 +1,23 @@
+{
+  "cli": {
+    "version": ">= 3.18.3"
+  },
+  "build": {
+    "development": {
+      "developmentClient": true,
+      "distribution": "internal",
+      "env": {
+        "EXPO_PUBLIC_ARENA_API_URL": "https://dev.are.na/oauth/authorize",
+        "EXPO_PUBLIC_ARENA_CLIENT_ID": "E3-ICKxh6sLQiUqgxvEZI1oFEXXZVeyM-3F146AY3_k",
+        "EXPO_PUBLIC_ARENA_TOKEN_URL": "https://arena-rn.vercel.app/api/token"
+      }
+    },
+    "preview": {
+      "distribution": "internal"
+    },
+    "production": {}
+  },
+  "submit": {
+    "production": {}
+  }
+}
